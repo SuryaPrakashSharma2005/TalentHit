@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from ..services.resume_service import process_resume
 from ats_platform.storage.local import save_uploaded_file
-from ..database.mongodb import get_db   # 🔥 IMPORTANT
+from ..database.mongodb import get_db
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
 
@@ -17,7 +17,7 @@ async def analyze_resume(
     resume_file: UploadFile = File(...),
     job_id: str = Form(...),
     job_requirements: str = Form(...),
-    db: AsyncIOMotorDatabase = Depends(get_db)  # 🔥 INJECT DB
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
 
     if resume_file.content_type != "application/pdf":
@@ -31,13 +31,13 @@ async def analyze_resume(
     resume_path = None
 
     try:
-        resume_path = save_uploaded_file(resume_file)
+        resume_path = await save_uploaded_file(resume_file)
 
         result = await process_resume(
             resume_path=resume_path,
             job_requirements=job_requirements_dict,
             job_id=job_id,
-            db=db  # 🔥 PASS DB
+            db=db
         )
 
         return result
