@@ -39,6 +39,7 @@ def create_app() -> FastAPI:
             "http://localhost:8080",
             "http://127.0.0.1:8080",
             "http://10.60.42.214:8080",
+            "https://luxury-croquembouche-0908f4.netlify.app",
         ],
         allow_credentials=True,
         allow_methods=["*"],
