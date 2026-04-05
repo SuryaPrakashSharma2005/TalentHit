@@ -2,9 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime
 from bson import ObjectId
-from google.oauth2 import id_token
-from google.auth.transport import requests
 from jose import jwt, JWTError
+import httpx
 import os
 
 from ..database.mongodb import get_db
@@ -27,7 +26,6 @@ COOKIE_SECURE = True if IS_PRODUCTION else False
 COOKIE_SAMESITE = "none" if IS_PRODUCTION else "lax"
 
 REFRESH_SECRET = os.getenv("REFRESH_SECRET_KEY")
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
 if not REFRESH_SECRET:
     raise ValueError("REFRESH_SECRET_KEY is not configured")
@@ -157,20 +155,30 @@ async def google_login(payload: dict,
                        response: Response,
                        db: AsyncIOMotorDatabase = Depends(get_db)):
 
-    token = payload.get("token")
+    access_token = payload.get("token")
+    role = payload.get("role", "applicant")
 
-    if not token:
-        raise HTTPException(400, "Missing Google token")
+    if not access_token:
+        raise HTTPException(400, "Missing token")
+
+    if role not in ["company", "applicant"]:
+        role = "applicant"
 
     try:
-        idinfo = id_token.verify_oauth2_token(
-            token,
-            requests.Request(),
-            GOOGLE_CLIENT_ID
-        )
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            if r.status_code != 200:
+                raise HTTPException(400, "Invalid Google token")
+            idinfo = r.json()
 
-        email = idinfo["email"].strip().lower()
-        name = idinfo.get("name")
+        email = idinfo.get("email", "").strip().lower()
+        name = idinfo.get("name", email.split("@")[0])
+
+        if not email:
+            raise HTTPException(400, "Could not get email from Google")
 
         user = await db["users"].find_one({"email": email})
 
@@ -178,13 +186,23 @@ async def google_login(payload: dict,
             new_user = {
                 "email": email,
                 "name": name,
-                "role": "applicant",
-                "google_id": idinfo["sub"],
+                "role": role,
+                "google_id": idinfo.get("sub"),
                 "created_at": datetime.utcnow()
             }
             result = await db["users"].insert_one(new_user)
             user_id = str(result.inserted_id)
-            role = "applicant"
+
+            if role == "applicant":
+                await db["candidates"].insert_one({
+                    "_id": result.inserted_id,
+                    "name": name,
+                    "email": email,
+                    "skills": [],
+                    "experience_years": 0,
+                    "education": {},
+                    "created_at": datetime.utcnow()
+                })
         else:
             user_id = str(user["_id"])
             role = user["role"]
@@ -196,11 +214,13 @@ async def google_login(payload: dict,
 
         return {"message": "Google login successful"}
 
-    except ValueError:
-        raise HTTPException(400, "Invalid Google token")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Google login failed: {str(e)}")
 
 
-# ================= REFRESH (STRICT TYPE VALIDATION) =================
+# ================= REFRESH =================
 
 @router.post("/refresh")
 async def refresh_token(request: Request,
