@@ -41,7 +41,8 @@ def create_app() -> FastAPI:
             "http://10.60.42.214:8080",
             "https://luxury-croquembouche-0908f4.netlify.app",
             "https://talenthit.in",
-            
+            "https://talent-hit-frontend-4ovk.vercel.app/",
+
         ],
         allow_credentials=True,
         allow_methods=["*"],
