@@ -20,7 +20,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 # ================= ENV CONFIG =================
 
-IS_PRODUCTION = os.getenv("ENV") == "production"
+IS_PRODUCTION = True
 
 COOKIE_SECURE = True if IS_PRODUCTION else False
 COOKIE_SAMESITE = "none" if IS_PRODUCTION else "lax"
