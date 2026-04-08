@@ -38,8 +38,9 @@ def set_auth_cookies(response: Response, access: str, refresh: str | None = None
         key="access_token",
         value=access,
         httponly=True,
-        secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,
+        secure=True,
+        samesite=False,
+        domain=".talenthit.in",
         max_age=60 * 60 * 24,
         path="/"
     )
