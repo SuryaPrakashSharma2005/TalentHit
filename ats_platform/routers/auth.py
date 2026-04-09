@@ -39,7 +39,7 @@ def set_auth_cookies(response: Response, access: str, refresh: str | None = None
         value=access,
         httponly=True,
         secure=True,
-        samesite=False,
+        samesite="none",
         domain=".talenthit.in",
         max_age=60 * 60 * 24,
         path="/"
@@ -50,16 +50,17 @@ def set_auth_cookies(response: Response, access: str, refresh: str | None = None
             key="refresh_token",
             value=refresh,
             httponly=True,
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
+            secure=True,
+            samesite="none",
+            domain=".talenthit.in",
             max_age=60 * 60 * 7,
             path="/"
         )
 
 
 def clear_auth_cookies(response: Response):
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
+    response.delete_cookie("access_token", path="/", domain=".talenthit.in")
+    response.delete_cookie("refresh_token", path="/", domain=".talenthit.in")
 
 
 # ================= REGISTER =================
