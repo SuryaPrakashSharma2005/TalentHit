@@ -17,10 +17,13 @@ async def get_current_user(
     request: Request,
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    token = request.cookies.get("access_token")
+    # ✅ Read token from Authorization header
+    auth_header = request.headers.get("Authorization")
 
-    if not token:
+    if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = auth_header.split(" ")[1]
 
     try:
         payload = jwt.decode(
