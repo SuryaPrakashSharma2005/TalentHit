@@ -141,7 +141,11 @@ async def google_login(payload: dict,
 
             idinfo = r.json()
 
-        email = idinfo.get("email", "").strip().lower()
+        email = idinfo.get("email")
+        if not email:
+            raise HTTPException(400, "Google account has no email")
+
+        email = email.strip().lower()
         name = idinfo.get("name", email.split("@")[0])
 
         user = await db["users"].find_one({"email": email})
@@ -175,6 +179,7 @@ async def google_login(payload: dict,
         }
 
     except Exception as e:
+        print("GOOGLE AUTH ERROR:", str(e))
         raise HTTPException(400, f"Google login failed: {str(e)}")
 
 
