@@ -136,17 +136,27 @@ async def google_login(payload: dict,
                 "https://www.googleapis.com/oauth2/v3/userinfo",
                 headers={"Authorization": f"Bearer {access_token}"}
             )
+
+            # 🔴 DEBUG
+            print("GOOGLE STATUS:", r.status_code)
+            print("GOOGLE RESPONSE TEXT:", r.text)
+
             if r.status_code != 200:
-                raise HTTPException(400, "Invalid Google token")
+                raise HTTPException(400, f"Invalid Google token: {r.text}")
 
-            idinfo = r.json()
+            # ✅ SAFE JSON PARSE
+            try:
+                idinfo = r.json()
+            except Exception:
+                raise HTTPException(400, "Google response is not valid JSON")
 
+        # ✅ SAFE EMAIL
         email = idinfo.get("email")
         if not email:
-            raise HTTPException(400, "Google account has no email")
+            raise HTTPException(400, "Google account email not available")
 
         email = email.strip().lower()
-        name = idinfo.get("name", email.split("@")[0])
+        name = idinfo.get("name") or email.split("@")[0]
 
         user = await db["users"].find_one({"email": email})
 
@@ -179,9 +189,8 @@ async def google_login(payload: dict,
         }
 
     except Exception as e:
-        print("GOOGLE AUTH ERROR:", str(e))
+        print("🔥 GOOGLE AUTH ERROR:", str(e))
         raise HTTPException(400, f"Google login failed: {str(e)}")
-
 
 # ================= REFRESH =================
 
