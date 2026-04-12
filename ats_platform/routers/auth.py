@@ -5,6 +5,7 @@ from bson import ObjectId
 from jose import jwt, JWTError
 import httpx
 import os
+import traceback
 
 from ..database.mongodb import get_db
 from ..core.security import (
@@ -148,6 +149,7 @@ async def google_login(payload: dict,
             try:
                 idinfo = r.json()
             except Exception:
+                traceback.print_exc() 
                 raise HTTPException(400, "Google response is not valid JSON")
 
         # ✅ SAFE EMAIL
