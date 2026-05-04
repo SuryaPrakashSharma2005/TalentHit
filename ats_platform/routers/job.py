@@ -17,6 +17,11 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 # RECOMMENDED JOBS (SKILL MATCH BASED)
 # ======================================================
 
+from datetime import datetime, timezone
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
 @router.get("/recommended")
 async def get_recommended_jobs(
     db: AsyncIOMotorDatabase = Depends(get_db),
@@ -25,44 +30,77 @@ async def get_recommended_jobs(
     if current_user["role"] != "applicant":
         raise HTTPException(403, "Only applicants allowed")
 
-    candidate = await db["candidates"].find_one({
-        "_id": ObjectId(current_user["id"])
-    })
+    user_id = ObjectId(current_user["id"])
+
+    # ======================================================
+    # 🔥 GET OR CREATE CANDIDATE (MAIN FIX)
+    # ======================================================
+    candidate = await db["candidates"].find_one({"_id": user_id})
 
     if not candidate:
-        raise HTTPException(404, "Candidate not found")
+        candidate = {
+            "_id": user_id,
+            "name": current_user.get("email", "").split("@")[0],
+            "email": current_user.get("email"),
+            "skills": [],
+            "experience_years": 0,
+            "education": {},
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db["candidates"].insert_one(candidate)
 
+    # ======================================================
+    # 🔥 SAFE SKILL HANDLING
+    # ======================================================
     candidate_skills = set(
         skill.lower() for skill in candidate.get("skills", [])
     )
 
-    # Get jobs already applied to
+    # ======================================================
+    # 🔥 GET APPLIED JOBS
+    # ======================================================
     applied_jobs = await db["applications"].find(
-        {"candidate_id": ObjectId(current_user["id"])},
+        {"candidate_id": user_id},
         {"job_id": 1}
     ).to_list(length=1000)
 
     applied_job_ids = {
-        str(app["job_id"]) for app in applied_jobs
+        str(app["job_id"]) for app in applied_jobs if app.get("job_id")
     }
 
+    # ======================================================
+    # 🔥 FETCH JOBS
+    # ======================================================
     jobs = []
     cursor = db["jobs"].find({"status": "ACTIVE"})
 
     async for job in cursor:
+
+        # Skip already applied jobs
         if str(job["_id"]) in applied_job_ids:
-            continue  # ✅ exclude already applied jobs
+            continue
 
         job_skills = set(
             skill.lower() for skill in job.get("required_skills", [])
         )
 
-        match_percent = (
-            (len(candidate_skills & job_skills) / len(job_skills)) * 100
-            if job_skills else 0
-        )
-        if match_percent < 75:
-            continue
+        # ======================================================
+        # 🔥 MATCH LOGIC (SAFE)
+        # ======================================================
+        if job_skills:
+            match_percent = (
+                len(candidate_skills & job_skills) / len(job_skills)
+            ) * 100
+        else:
+            match_percent = 0
+
+        # ======================================================
+        # 🔥 COLD START FIX
+        # If no candidate skills → show all jobs
+        # ======================================================
+        if candidate_skills:
+            if match_percent < 75:
+                continue
 
         jobs.append({
             "_id": str(job["_id"]),
@@ -72,6 +110,9 @@ async def get_recommended_jobs(
             "match_percentage": round(match_percent, 2)
         })
 
+    # ======================================================
+    # 🔥 SORT
+    # ======================================================
     jobs.sort(key=lambda x: x["match_percentage"], reverse=True)
 
     return jobs
