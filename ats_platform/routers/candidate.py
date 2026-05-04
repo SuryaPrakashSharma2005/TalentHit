@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import Dict, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime,timezone
 import os
 
 from ..database.mongodb import get_db
@@ -47,7 +47,15 @@ async def get_my_profile(
     })
 
     if not candidate:
-        raise HTTPException(404, "Profile not found")
+        candidate = {
+            "_id": ObjectId(current_user["id"]),
+            "name": current_user.get("email", "").split("@")[0],
+            "email": current_user.get("email"),
+            "skills": [],
+            "experience_years": 0,
+            "education": {},
+            "created_at": datetime.now(timezone.utc)
+        }
 
     return {
         "_id": str(candidate["_id"]),

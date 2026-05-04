@@ -149,7 +149,6 @@ async def google_login(payload: dict,
             try:
                 idinfo = r.json()
             except Exception:
-                traceback.print_exc() 
                 raise HTTPException(400, "Google response is not valid JSON")
 
         # ✅ SAFE EMAIL
