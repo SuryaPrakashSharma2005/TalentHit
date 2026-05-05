@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 from jose import jwt, JWTError
 import httpx
 import os
 import traceback
+import random
 
 from ..database.mongodb import get_db
 from ..core.security import (
@@ -23,7 +24,8 @@ REFRESH_SECRET = os.getenv("REFRESH_SECRET_KEY")
 if not REFRESH_SECRET:
     raise ValueError("REFRESH_SECRET_KEY is not configured")
 
-
+def generate_otp():
+    return str(random.randint(100000, 999999))
 # ================= REGISTER =================
 
 @router.post("/register")
@@ -33,7 +35,10 @@ async def register(payload: dict,
     email = payload.get("email")
     password = payload.get("password")
     role = payload.get("role")
+    otp_record = await db["otp_verifications"].find_one({"email": email})
 
+    if not otp_record or not otp_record.get("verified"):
+        raise HTTPException(400, "Email not verified")
     if not email or not password or not role:
         raise HTTPException(400, "Missing required fields")
 
@@ -242,3 +247,60 @@ async def logout():
 @router.get("/me")
 async def get_me(current_user=Depends(get_current_user)):
     return current_user
+
+@router.post("/send-otp")
+async def send_otp(payload: dict, db: AsyncIOMotorDatabase = Depends(get_db)):
+
+    email = payload.get("email")
+    if not email:
+        raise HTTPException(400, "Email required")
+
+    email = email.strip().lower()
+
+    # 🚫 prevent duplicate email
+    existing = await db["users"].find_one({"email": email})
+    if existing:
+        raise HTTPException(400, "Email already in use")
+
+    otp = generate_otp()
+
+    await db["otp_verifications"].update_one(
+        {"email": email},
+        {
+            "$set": {
+                "otp": otp,
+                "expires_at": datetime.utcnow() + timedelta(minutes=5),
+                "verified": False
+            }
+        },
+        upsert=True
+    )
+
+    print("OTP:", otp)  # 🔥 replace with email later
+
+    return {"message": "OTP sent"}
+
+
+@router.post("/verify-otp")
+async def verify_otp(payload: dict, db: AsyncIOMotorDatabase = Depends(get_db)):
+
+    email = payload.get("email")
+    otp = payload.get("otp")
+
+    record = await db["otp_verifications"].find_one({"email": email})
+
+    if not record:
+        raise HTTPException(400, "OTP not found")
+
+    if record["otp"] != otp:
+        raise HTTPException(400, "Invalid OTP")
+
+    if record["expires_at"] < datetime.utcnow():
+        raise HTTPException(400, "OTP expired")
+
+    await db["otp_verifications"].update_one(
+        {"email": email},
+        {"$set": {"verified": True}}
+    )
+
+    return {"message": "OTP verified"}

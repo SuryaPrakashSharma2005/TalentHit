@@ -50,6 +50,8 @@ async def check_mongo_connection():
 
 async def create_indexes():
     try:
+        await db["otp_verifications"].create_index("email", unique=True)
+        await db["otp_verifications"].create_index("expires_at", expireAfterSeconds=0)
         # USERS
         await db["users"].create_index("email", unique=True, background=True)
 
