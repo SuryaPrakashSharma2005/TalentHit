@@ -253,11 +253,14 @@ async def get_candidate_applications(
 
 @router.post("/upload-resume")
 async def upload_resume(
+    
     resume_file: UploadFile = File(...),
     db: AsyncIOMotorDatabase = Depends(get_db),
     current_user=Depends(get_current_user)
+    
 ):
 
+    print("🔥 Upload endpoint HIT")
     if current_user["role"] != "applicant":
         raise HTTPException(403, "Only applicants allowed")
 
