@@ -269,7 +269,7 @@ async def upload_resume(
     if resume_file.content_type != "application/pdf":
         raise HTTPException(400, "Only PDF allowed")
 
-    resume_path = save_uploaded_file(resume_file)
+    resume_path = await save_uploaded_file(resume_file)
 
     try:
         result = await process_resume(
