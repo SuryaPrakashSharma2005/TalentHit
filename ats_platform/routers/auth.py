@@ -16,6 +16,7 @@ from ..core.security import (
     create_refresh_token
 )
 from ..core.dependencies import get_current_user
+from ..services.email_service import send_otp_email
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -252,13 +253,14 @@ async def get_me(current_user=Depends(get_current_user)):
 async def send_otp(payload: dict, db: AsyncIOMotorDatabase = Depends(get_db)):
 
     email = payload.get("email")
+
     if not email:
         raise HTTPException(400, "Email required")
 
     email = email.strip().lower()
 
-    # 🚫 prevent duplicate email
     existing = await db["users"].find_one({"email": email})
+
     if existing:
         raise HTTPException(400, "Email already in use")
 
@@ -276,10 +278,12 @@ async def send_otp(payload: dict, db: AsyncIOMotorDatabase = Depends(get_db)):
         upsert=True
     )
 
-    print("OTP:", otp)  # 🔥 replace with email later
+    # 🔥 SEND REAL EMAIL
+    await send_otp_email(email, otp)
 
-    return {"message": "OTP sent"}
-
+    return {
+        "message": "OTP sent successfully"
+    }
 
 @router.post("/verify-otp")
 async def verify_otp(payload: dict, db: AsyncIOMotorDatabase = Depends(get_db)):
