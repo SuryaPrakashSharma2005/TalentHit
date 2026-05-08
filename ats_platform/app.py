@@ -1,6 +1,7 @@
 from fastapi import FastAPI
+from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-
+load_dotenv()
 from .routers.health import router as health_router
 from .routers.resume import router as resume_router
 from .assessment.quiz.api import router as quiz_router
