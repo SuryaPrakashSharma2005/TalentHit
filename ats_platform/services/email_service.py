@@ -1,45 +1,26 @@
 import os
-import aiosmtplib
+import resend
 
-from email.message import EmailMessage
-
-SMTP_EMAIL = os.getenv("SMTP_EMAIL")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 
 async def send_otp_email(receiver_email: str, otp: str):
 
-    print("SMTP EMAIL:", SMTP_EMAIL)
-    print("SMTP HOST:", SMTP_HOST)
-    print("SMTP PORT:", SMTP_PORT)
+    params = {
+        "from": "TalentHit <onboarding@resend.dev>",
+        "to": [receiver_email],
+        "subject": "TalentHit OTP Verification",
+        "html": f"""
+        <div style="font-family: Arial; padding: 20px;">
+            <h2>TalentHit Verification</h2>
 
-    message = EmailMessage()
+            <p>Your OTP is:</p>
 
-    message["From"] = SMTP_EMAIL
-    message["To"] = receiver_email
-    message["Subject"] = "TalentHit OTP Verification"
+            <h1>{otp}</h1>
 
-    message.set_content(f"""
-Your OTP is: {otp}
+            <p>This OTP expires in 5 minutes.</p>
+        </div>
+        """,
+    }
 
-This OTP expires in 5 minutes.
-""")
-
-    try:
-        await aiosmtplib.send(
-            message,
-            hostname=SMTP_HOST,
-            port=SMTP_PORT,
-            start_tls=True,
-            username=SMTP_EMAIL,
-            password=SMTP_PASSWORD,
-            timeout=10
-        )
-
-        print("✅ OTP EMAIL SENT")
-
-    except Exception as e:
-        print("❌ EMAIL ERROR:", str(e))
-        raise Exception(f"Email sending failed: {str(e)}")
+    resend.Emails.send(params)
