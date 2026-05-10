@@ -8,7 +8,7 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 async def send_otp_email(receiver_email: str, otp: str):
     try:
         params = {
-            "from": "TalentHit <onboarding@resend.dev>",
+            "from": "TalentHit <talenthit.in>",
             "to": [receiver_email],
             "subject": "Your TalentHit Verification Code",
             "html": f"""
