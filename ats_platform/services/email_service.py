@@ -109,7 +109,7 @@ async def send_otp_email(receiver_email: str, otp: str):
                     <div class="footer">
                         <p><strong>TalentHit</strong> - Connecting Talent with Opportunity</p>
                         <p>This is an automated message. Please do not reply to this email.</p>
-                        <p>&copy; 2024 TalentHit. All rights reserved.</p>
+                        <p>&copy; 2026 TalentHit. All rights reserved.</p>
                     </div>
                 </div>
             </body>
