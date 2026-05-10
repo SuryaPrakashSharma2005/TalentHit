@@ -264,6 +264,16 @@ async def send_otp(payload: dict, db: AsyncIOMotorDatabase = Depends(get_db)):
     if existing:
         raise HTTPException(400, "Email already in use")
 
+    # Check for recent OTP to prevent spam
+    recent_otp = await db["otp_verifications"].find_one({
+        "email": email,
+        "expires_at": {"$gt": datetime.utcnow()}
+    })
+
+    if recent_otp:
+        time_left = (recent_otp["expires_at"] - datetime.utcnow()).seconds // 60
+        raise HTTPException(429, f"OTP already sent. Please wait {time_left} minutes before requesting a new one.")
+
     otp = generate_otp()
 
     await db["otp_verifications"].update_one(
@@ -279,7 +289,12 @@ async def send_otp(payload: dict, db: AsyncIOMotorDatabase = Depends(get_db)):
     )
 
     # 🔥 SEND REAL EMAIL
-    await send_otp_email(email, otp)
+    try:
+        await send_otp_email(email, otp)
+    except Exception as e:
+        # If email fails, remove the OTP record to allow retry
+        await db["otp_verifications"].delete_one({"email": email})
+        raise HTTPException(500, "Failed to send OTP email. Please try again.")
 
     return {
         "message": "OTP sent successfully"
