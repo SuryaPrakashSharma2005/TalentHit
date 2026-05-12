@@ -65,14 +65,35 @@ async def register(payload: dict,
     result = await db["users"].insert_one(user)
 
     if role == "applicant":
+
         await db["candidates"].insert_one({
+        "_id": result.inserted_id,
+        "name": email.split("@")[0],
+        "email": email,
+        "skills": [],
+        "experience_years": 0,
+        "education": {},
+        "created_at": datetime.utcnow()
+    })
+
+    elif role == "company":
+
+        await db["companies"].insert_one({
             "_id": result.inserted_id,
             "name": email.split("@")[0],
             "email": email,
-            "skills": [],
-            "experience_years": 0,
-            "education": {},
-            "created_at": datetime.utcnow()
+            "website": "",
+            "logo": "",
+
+            "notify_new_applications": True,
+            "notify_assessment_complete": True,
+            "notify_weekly_reports": False,
+
+            "auto_screen": True,
+            "require_assessment": True,
+
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
         })
 
     access = create_access_token(str(result.inserted_id), role)
@@ -128,8 +149,10 @@ async def login(payload: dict,
 # ================= GOOGLE LOGIN =================
 
 @router.post("/google")
-async def google_login(payload: dict,
-                       db: AsyncIOMotorDatabase = Depends(get_db)):
+async def google_login(
+    payload: dict,
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
 
     access_token = payload.get("token")
     role = payload.get("role", "applicant")
@@ -138,36 +161,55 @@ async def google_login(payload: dict,
         raise HTTPException(400, "Missing token")
 
     try:
+
         async with httpx.AsyncClient() as client:
+
             r = await client.get(
                 "https://www.googleapis.com/oauth2/v3/userinfo",
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={
+                    "Authorization": f"Bearer {access_token}"
+                }
             )
 
-            # 🔴 DEBUG
             print("GOOGLE STATUS:", r.status_code)
             print("GOOGLE RESPONSE TEXT:", r.text)
 
             if r.status_code != 200:
-                raise HTTPException(400, f"Invalid Google token: {r.text}")
+                raise HTTPException(
+                    400,
+                    f"Invalid Google token: {r.text}"
+                )
 
-            # ✅ SAFE JSON PARSE
             try:
                 idinfo = r.json()
             except Exception:
-                raise HTTPException(400, "Google response is not valid JSON")
+                raise HTTPException(
+                    400,
+                    "Google response is not valid JSON"
+                )
 
-        # ✅ SAFE EMAIL
         email = idinfo.get("email")
+
         if not email:
-            raise HTTPException(400, "Google account email not available")
+            raise HTTPException(
+                400,
+                "Google account email not available"
+            )
 
         email = email.strip().lower()
+
         name = idinfo.get("name") or email.split("@")[0]
 
-        user = await db["users"].find_one({"email": email})
+        user = await db["users"].find_one({
+            "email": email
+        })
+
+        # ==================================================
+        # CREATE USER + PROFILE IF NEW
+        # ==================================================
 
         if not user:
+
             new_user = {
                 "email": email,
                 "name": name,
@@ -175,13 +217,58 @@ async def google_login(payload: dict,
                 "google_id": idinfo.get("sub"),
                 "created_at": datetime.utcnow()
             }
+
             result = await db["users"].insert_one(new_user)
+
             user_id = str(result.inserted_id)
+
+            # ==============================================
+            # APPLICANT PROFILE AUTO CREATE
+            # ==============================================
+
+            if role == "applicant":
+
+                await db["candidates"].insert_one({
+                    "_id": result.inserted_id,
+                    "name": name,
+                    "email": email,
+                    "skills": [],
+                    "experience_years": 0,
+                    "education": {},
+                    "created_at": datetime.utcnow()
+                })
+
+            # ==============================================
+            # COMPANY PROFILE AUTO CREATE
+            # ==============================================
+
+            elif role == "company":
+
+                await db["companies"].insert_one({
+                    "_id": result.inserted_id,
+                    "name": name,
+                    "email": email,
+                    "website": "",
+                    "logo": "",
+
+                    "notify_new_applications": True,
+                    "notify_assessment_complete": True,
+                    "notify_weekly_reports": False,
+
+                    "auto_screen": True,
+                    "require_assessment": True,
+
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                })
+
         else:
+
             user_id = str(user["_id"])
             role = user["role"]
 
         access = create_access_token(user_id, role)
+
         refresh = create_refresh_token(user_id)
 
         return {
@@ -196,9 +283,13 @@ async def google_login(payload: dict,
         }
 
     except Exception as e:
-        print("🔥 GOOGLE AUTH ERROR:", str(e))
-        raise HTTPException(400, f"Google login failed: {str(e)}")
 
+        print("🔥 GOOGLE AUTH ERROR:", str(e))
+
+        raise HTTPException(
+            400,
+            f"Google login failed: {str(e)}"
+        )
 # ================= REFRESH =================
 
 @router.post("/refresh")
