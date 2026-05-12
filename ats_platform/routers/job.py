@@ -33,9 +33,11 @@ async def get_recommended_jobs(
     user_id = ObjectId(current_user["id"])
 
     # ======================================================
-    # 🔥 GET OR CREATE CANDIDATE (MAIN FIX)
+    # 🔥 GET OR CREATE CANDIDATE
     # ======================================================
-    candidate = await db["candidates"].find_one({"_id": user_id})
+    candidate = await db["candidates"].find_one({
+        "_id": user_id
+    })
 
     if not candidate:
         candidate = {
@@ -47,13 +49,15 @@ async def get_recommended_jobs(
             "education": {},
             "created_at": datetime.now(timezone.utc)
         }
+
         await db["candidates"].insert_one(candidate)
 
     # ======================================================
-    # 🔥 SAFE SKILL HANDLING
+    # 🔥 CANDIDATE SKILLS
     # ======================================================
     candidate_skills = set(
-        skill.lower() for skill in candidate.get("skills", [])
+        skill.lower()
+        for skill in candidate.get("skills", [])
     )
 
     # ======================================================
@@ -65,14 +69,19 @@ async def get_recommended_jobs(
     ).to_list(length=1000)
 
     applied_job_ids = {
-        str(app["job_id"]) for app in applied_jobs if app.get("job_id")
+        str(app["job_id"])
+        for app in applied_jobs
+        if app.get("job_id")
     }
 
     # ======================================================
-    # 🔥 FETCH JOBS
+    # 🔥 FETCH ACTIVE JOBS
     # ======================================================
     jobs = []
-    cursor = db["jobs"].find({"status": "ACTIVE"})
+
+    cursor = db["jobs"].find({
+        "status": "ACTIVE"
+    })
 
     async for job in cursor:
 
@@ -80,42 +89,91 @@ async def get_recommended_jobs(
         if str(job["_id"]) in applied_job_ids:
             continue
 
+        # ======================================================
+        # 🔥 JOB SKILLS
+        # ======================================================
         job_skills = set(
-            skill.lower() for skill in job.get("required_skills", [])
+            skill.lower()
+            for skill in job.get("required_skills", [])
         )
 
         # ======================================================
-        # 🔥 MATCH LOGIC (SAFE)
+        # 🔥 MATCH CALCULATION
         # ======================================================
         if job_skills:
             match_percent = (
-                len(candidate_skills & job_skills) / len(job_skills)
+                len(candidate_skills & job_skills)
+                / len(job_skills)
             ) * 100
         else:
             match_percent = 0
 
         # ======================================================
-        # 🔥 COLD START FIX
-        # If no candidate skills → show all jobs
+        # 🔥 FILTER LOW MATCH
         # ======================================================
-        if candidate_skills:
-            if match_percent < 75:
-                continue
+        if candidate_skills and match_percent < 75:
+            continue
+
+        # ======================================================
+        # 🔥 COMPANY DETAILS
+        # ======================================================
+        company = await db["companies"].find_one({
+            "_id": job.get("company_id")
+        })
 
         jobs.append({
             "_id": str(job["_id"]),
+
+            # JOB
             "title": job.get("title"),
-            "min_experience": job.get("min_experience", 0),
-            "required_skills": job.get("required_skills", []),
-            "match_percentage": round(match_percent, 2)
+            "domain": job.get("domain"),
+            "department": job.get("department"),
+
+            # COMPANY
+            "company_name": (
+                company.get("name")
+                if company else "Unknown Company"
+            ),
+
+            "company_logo": (
+                company.get("logo")
+                if company else None
+            ),
+
+            "company_website": (
+                company.get("website")
+                if company else None
+            ),
+
+            # REQUIREMENTS
+            "min_experience": job.get(
+                "min_experience",
+                0
+            ),
+
+            "required_skills": job.get(
+                "required_skills",
+                []
+            ),
+
+            # MATCH
+            "match_percentage": round(
+                match_percent,
+                2
+            )
         })
 
     # ======================================================
     # 🔥 SORT
     # ======================================================
-    jobs.sort(key=lambda x: x["match_percentage"], reverse=True)
+    jobs.sort(
+        key=lambda x: x["match_percentage"],
+        reverse=True
+    )
 
     return jobs
+
+
 # ======================================================
 # PUBLIC ACTIVE JOB LISTING
 # ======================================================
