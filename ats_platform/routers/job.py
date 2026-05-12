@@ -667,3 +667,65 @@ async def update_application_stage(
     )
 
     return {"stage": new_stage}
+
+
+@router.get("/{job_id}")
+async def get_job_details(
+    job_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+
+    try:
+        job_object_id = ObjectId(job_id)
+    except:
+        raise HTTPException(400, "Invalid job ID")
+
+    job = await db["jobs"].find_one({
+        "_id": job_object_id,
+        "status": "ACTIVE"
+    })
+
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    company = await db["companies"].find_one({
+        "_id": job.get("company_id")
+    })
+
+    return {
+        "_id": str(job["_id"]),
+
+        # JOB
+        "title": job.get("title"),
+        "description": job.get("description"),
+        "domain": job.get("domain"),
+        "department": job.get("department"),
+        "required_skills": job.get("required_skills", []),
+        "min_experience": job.get("min_experience", 0),
+        "openings": job.get("openings", 1),
+        "created_at": str(job.get("created_at")),
+
+        # COMPANY
+        "company_name": (
+            company.get("name")
+            if company else "Unknown Company"
+        ),
+
+        "company_logo": (
+            company.get("logo")
+            if company else None
+        ),
+
+        "company_website": (
+            company.get("website")
+            if company else None
+        ),
+
+        "company_description": (
+            company.get("description")
+            if company else None
+        ),
+
+        # SHAREABLE LINK
+        "share_url": f"https://talenthit.in/jobs/{str(job['_id'])}"
+    }
