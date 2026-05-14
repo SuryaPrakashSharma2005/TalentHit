@@ -215,6 +215,7 @@ async def create_job(
     job = {
     "company_id": ObjectId(current_user["id"]),
     "title": payload["title"],
+    "perks": payload.get("perks", []),
     "description": payload.get("description"),
     "eligibility": payload.get("eligibility"),
 
