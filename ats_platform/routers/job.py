@@ -215,6 +215,7 @@ async def create_job(
     job = {
     "company_id": ObjectId(current_user["id"]),
     "title": payload["title"],
+    "description": payload.get("description"),
 
     # 🔥 NEW STRUCTURE
     "department": payload.get("department", "General"),
