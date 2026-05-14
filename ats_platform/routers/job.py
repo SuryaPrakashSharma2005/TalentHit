@@ -701,7 +701,7 @@ async def get_job_details(
         # JOB
         "title": job.get("title"),
         "description": job.get("description"),
-        "eligibility_criteria": job.get("eligibility"),
+        "eligibility_criteria": job.get("eligibility_criteria"),
         "perks": job.get("perks", []),
         "domain": job.get("domain"),
         "department": job.get("department"),
