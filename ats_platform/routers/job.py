@@ -217,7 +217,7 @@ async def create_job(
     "title": payload["title"],
     "perks": payload.get("perks", []),
     "description": payload.get("description"),
-    "eligibility": payload.get("eligibility"),
+    "eligibility_criteria": payload.get("eligibility_criteria"),
 
     # 🔥 NEW STRUCTURE
     "department": payload.get("department", "General"),
@@ -701,6 +701,7 @@ async def get_job_details(
         # JOB
         "title": job.get("title"),
         "description": job.get("description"),
+        "eligibility_criteria": job.get("eligibility"),
         "perks": job.get("perks", []),
         "domain": job.get("domain"),
         "department": job.get("department"),
