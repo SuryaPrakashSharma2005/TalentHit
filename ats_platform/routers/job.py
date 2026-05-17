@@ -238,6 +238,24 @@ async def create_job(
     "updated_at": datetime.utcnow()
 }
 
+    # Map domain to assessment types (supports varied assessment workflows)
+    domain_key = (payload.get("domain") or "").strip().lower()
+    domain_map = {
+        "software": ["mcq", "coding"],
+        "mechanical": ["mcq", "numerical"],
+        "electrical": ["mcq", "circuit_logic"],
+        "civil": ["mcq", "numerical"],
+        "hr": ["situational"],
+        "marketing": ["case_based"],
+        "sales": ["communication", "logic"]
+    }
+
+    assessment_types = domain_map.get(domain_key, ["mcq"])
+
+    job["assessment_types"] = assessment_types
+    job["mcq_required"] = "mcq" in assessment_types
+    job["coding_required"] = "coding" in assessment_types
+
     result = await db["jobs"].insert_one(job)
 
     job["_id"] = str(result.inserted_id)
@@ -328,12 +346,10 @@ async def apply_to_job(
 
     if skill_match_percentage < 75:
         stage = "SKILL_REJECTED"
-
-    elif job.get("domain") == "Software":
-        stage = "ASSESSMENT_PENDING"   # MCQ + Coding
-
     else:
-        stage = "MCQ_PENDING"          # Only MCQ
+        assessment_types = job.get("assessment_types", ["mcq"]) if job else ["mcq"]
+        has_non_mcq = any(t for t in assessment_types if t != "mcq")
+        stage = "ASSESSMENT_PENDING" if has_non_mcq else "MCQ_PENDING"
 
     application = {
     "job_id": job_object_id,
@@ -350,8 +366,8 @@ async def apply_to_job(
     # ===============================
     # ASSESSMENT TYPE FLAGS
     # ===============================
-    "mcq_required": True,
-    "coding_required": job.get("domain") == "Software",
+    "mcq_required": job.get("mcq_required", True),
+    "coding_required": job.get("coding_required", False),
     # ===============================
     # MATCH METRICS
     # ===============================
@@ -461,8 +477,12 @@ async def start_test(
     job = await db["jobs"].find_one({"_id": job_obj})
     required_skills = job.get("required_skills", [])
 
-    question_pool = await db["mcq_bank"].find(
-        {"skill": {"$in": required_skills}}
+    # Fetch MCQ questions from new collection and schema
+    question_pool = await db["assessment_questions"].find(
+        {
+            "skills": {"$in": required_skills},
+            "is_active": True
+        }
     ).to_list(length=200)
 
     if len(question_pool) < 10:
@@ -473,13 +493,17 @@ async def start_test(
     snapshot = []
 
     for q in selected:
-        options = q["options"][:]
+        # options are objects: {"id": "A", "text": "..."}
+        options = [ {"id": o.get("id"), "text": o.get("text")} for o in q.get("options", []) ]
         random.shuffle(options)
-        correct_index = options.index(q["options"][q["correct"]])
+
+        # find index of correct option by matching id to correct_answer
+        correct_id = q.get("correct_answer")
+        correct_index = next((i for i,o in enumerate(options) if o.get("id") == correct_id), None)
 
         snapshot.append({
             "id": str(q["_id"]),
-            "question": q["question"],
+            "question": q.get("question_text"),
             "options": options,
             "correct": correct_index
         })
@@ -585,10 +609,40 @@ async def submit_mcq(
 
     final_score = score_data["final_candidate_score"]
 
+    # Determine next stage based on remaining assessment types
     if application.get("coding_required"):
         stage = "CODING_PENDING"
     else:
-        stage = "SHORTLISTED" if final_score >= 70 else "REJECTED"
+        next_stage = None
+        for atype in application.get("assessment_types", []):
+            if atype == "mcq":
+                continue
+            if atype == "numerical":
+                next_stage = "NUMERICAL_PENDING"
+                break
+            if atype == "circuit_logic":
+                next_stage = "CIRCUIT_PENDING"
+                break
+            if atype == "situational":
+                next_stage = "SITUATIONAL_PENDING"
+                break
+            if atype == "case_based":
+                next_stage = "CASE_PENDING"
+                break
+            if atype == "communication":
+                next_stage = "COMMUNICATION_PENDING"
+                break
+            if atype == "logic":
+                next_stage = "LOGIC_PENDING"
+                break
+            if atype == "coding":
+                next_stage = "CODING_PENDING"
+                break
+
+        if next_stage:
+            stage = next_stage
+        else:
+            stage = "SHORTLISTED" if final_score >= 70 else "REJECTED"
 
     await db["applications"].update_one(
         {"_id": app_obj},

@@ -78,9 +78,11 @@ async def generate_quiz(
     # FETCH QUESTIONS FROM DB
     # -------------------------------------
 
-    pool = await db["mcq_bank"].find({
-        "skill": {"$in": required_skills}
-    }).to_list(length=100)
+    # fetch questions from new collection and schema
+    pool = await db["assessment_questions"].find({
+        "skills": {"$in": required_skills},
+        "is_active": True
+    }).to_list(length=200)
 
     if len(pool) < 10:
         raise HTTPException(400, "Not enough questions")
@@ -91,14 +93,15 @@ async def generate_quiz(
     snapshot = []
 
     for q in selected:
-        options = q["options"][:]
+        options = [{"id": o.get("id"), "text": o.get("text")} for o in q.get("options", [])]
         random.shuffle(options)
 
-        correct_index = options.index(q["options"][q["correct"]])
+        correct_id = q.get("correct_answer")
+        correct_index = next((i for i,o in enumerate(options) if o.get("id") == correct_id), None)
 
         snapshot.append({
             "id": str(q["_id"]),
-            "question": q["question"],
+            "question": q.get("question_text"),
             "options": options,
             "correct": correct_index
         })

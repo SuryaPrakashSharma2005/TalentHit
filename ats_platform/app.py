@@ -17,6 +17,7 @@ from .assessment.coding.router import router as coding_router
 from .database.mongodb import check_mongo_connection, create_indexes
 
 
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="ATS Platform",
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(notify_router)
     app.include_router(company_settings_router)
     app.include_router(coding_router)
+
 
     return app
 
